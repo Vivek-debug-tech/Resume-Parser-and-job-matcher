@@ -1,0 +1,313 @@
+{
+  "name": "Resume",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "id": "46398b6d-f993-4534-aeb8-ab8f2549f167",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [
+        680,
+        -40
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HXpBxJBJ5cHmnCwC",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "additionalFields": {}
+      },
+      "id": "1efcc578-95f4-45e8-8056-086fb0ad311e",
+      "name": "Download Attachment",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 1,
+      "position": [
+        900,
+        -140
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HXpBxJBJ5cHmnCwC",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "https://api.affinda.com/v3/documents",
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_API_KEY"
+            }
+          ]
+        },
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "language",
+              "value": "en"
+            },
+            {
+              "name": "wait",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "id": "923b17ef-c896-484f-b822-ed4b154b6590",
+      "name": "Parse Resume",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        -140
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "X8fMtKELYhXI7spQ",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const skills = items[0].json.data.skills.map(s => s.name.toLowerCase());\nconst jobTitles = items[0].json.data.work_experience.map(w => w.job_title.toLowerCase());\nreturn [{ json: { skills, jobTitles } }];"
+      },
+      "id": "e8d8af49-0b4c-4d3e-a575-64d02ef87864",
+      "name": "Extract Skills & Titles",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1740,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://jsearch.p.rapidapi.com/search",
+        "options": {}
+      },
+      "id": "6998168d-5f0e-4da6-bdb8-9a039fd8345d",
+      "name": "Search Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1940,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const resumeSkills = $input.item.json.skills;\nconst jobs = $input.all()[0].json.data;\nconst scored = jobs.map(job => {\n  const jobSkills = (job.skills_required || []).map(s => s.toLowerCase());\n  const score = resumeSkills.filter(skill => jobSkills.includes(skill)).length;\n  return { ...job, score };\n});\nscored.sort((a, b) => b.score - a.score);\nreturn scored.slice(0, 3).map(job => ({ json: job }));"
+      },
+      "id": "82e95e64-bb66-45b3-a2e0-342704cbd63a",
+      "name": "Rank Matches",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2140,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your@email.com",
+        "toEmail": "={{$node[\"Gmail Trigger\"].json[\"from\"]}}",
+        "subject": "Top Job Matches Based on Your Resume",
+        "text": "={{ $json[\"job_title\"] + \" at \" + $json[\"employer_name\"] + \" - \" + $json[\"location\"] }}",
+        "options": {}
+      },
+      "id": "b0131e47-32e5-4ebe-a28b-c7e483b6980d",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        2340,
+        -100
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "2gvwd13lxz0WMriH",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "92630ffd-c8c0-48dd-b16e-f0cfd7e3c1a3",
+              "leftValue": "={{$node[\"Download Attachment\"].json.filename.toLowerCase()}}",
+              "rightValue": "\"resume\"",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "abf2ffb0-2481-488a-bff9-7bb9ac995c4e",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1560,
+        20
+      ],
+      "id": "2c16d2d5-d529-467a-963f-ed085ca45b62",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Attachment": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Resume": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Skills & Titles": {
+      "main": [
+        [
+          {
+            "node": "Search Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Jobs": {
+      "main": [
+        [
+          {
+            "node": "Rank Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rank Matches": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Parse Resume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Extract Skills & Titles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f2bf67ad-2d3b-4486-87b3-9e23f21beaa4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fc1371284ddd8053ebe6e84933c945308cf8033dc357068178d83c6ec45e647f"
+  },
+  "id": "uZuepHkgU5FUJpQ0",
+  "tags": []
+}
